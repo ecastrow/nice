@@ -250,6 +250,21 @@ class Homothety(Layer):
     def get_l1_weight_decay(self, coeffs):
         return coeffs * abs(self.D).sum()
 
+    def get_sigma_l1_decay(self, coeff):
+        return coeff * abs(T.exp(-self.D)).sum()
+
+    @wraps(Layer.get_layer_monitoring_channels)
+    def get_layer_monitoring_channels(self, state_below=None,
+                                      state=None, targets=None):
+        rval = OrderedDict()
+
+        S = T.exp(-self.D)
+        rval.update(OrderedDict([('S_stddev', S.std()),
+                                 ('S_mean', S.mean()),
+                                 ('S_over_1_stdev', 1.0 * (S > (S.mean() + S.std())).sum() ),
+                                 ('S_over_2_stdev', 1.0 * (S > (S.mean() + 2 * S.std())).sum() )]))
+
+        return rval
 
 class Reordering(Layer):
     def __init__(self, layer_name, mode='tile', ** kwargs):

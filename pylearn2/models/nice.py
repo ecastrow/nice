@@ -13,6 +13,7 @@ import theano
 import theano.tensor as T
 from pylearn2.models.model import Model
 from pylearn2.models.mlp import Layer, Linear, MLP
+from pylearn2.monitor import get_monitor_doc
 from pylearn2.space import VectorSpace, CompositeSpace
 from pylearn2.utils import sharedX, wraps, safe_update, serial
 from pylearn2.utils.rng import make_np_rng, make_theano_rng
@@ -98,6 +99,13 @@ class Distribution(Model):
         self.theano_rng = make_theano_rng(int(self.rng.randint(2 ** 30)),
                                           which_method=["normal", "uniform"])
 
+    def get_cumulative(self, z):
+        """
+        WRITEME
+        """
+        raise NotImplementedError(str(type(self))
+                                  + " does not implement get_cumulative.")
+
 
 class StandardNormal(Distribution):
     @wraps(Distribution.get_log_likelihood)
@@ -120,6 +128,10 @@ class StandardNormal(Distribution):
         entropy = entropy.sum(axis=-1)
 
         return entropy
+
+    @wraps(Distribution.get_cumulative)
+    def get_cumulative(self, z):
+        return 0.5 * (1 + T.erf(z / T.sqrt(2)))
 
 
 class StandardLogistic(Distribution):
@@ -144,6 +156,9 @@ class StandardLogistic(Distribution):
 
         return entropy
 
+    @wraps(Distribution.get_cumulative)
+    def get_cumulative(self, z):
+        return 1.0 / (1 + T.exp(-z))
 
 class NICE(Distribution):
     """
@@ -345,11 +360,58 @@ class NICE(Distribution):
 
     @wraps(Model.get_monitoring_channels)
     def get_monitoring_channels(self, data):
+        state_below = data
+        targets = None
         rval = OrderedDict()
         if self.encoder is not None:
-            rval = self.encoder.get_layer_monitoring_channels(
-                state_below=data
-            )
+            rval = OrderedDict()
+
+            """
+            state = state_below
+
+            for layer in self.layers:
+                state_below = state
+                state = layer.fprop(state)
+                args = [state_below, state]
+                if layer is self.layers[-1] and targets is not None:
+                    args.append(targets)
+                ch = layer.get_layer_monitoring_channels(*args)
+                if not isinstance(ch, OrderedDict):
+                    raise TypeError(str((type(ch), layer.layer_name)))
+                for key in ch:
+                    value = ch[key]
+                    doc = get_monitor_doc(value)
+                    if doc is None:
+                        doc = str(type(layer)) + \
+                            ".get_monitoring_channels_from_state did" + \
+                            " not provide any further documentation for" + \
+                            " this channel."
+                    doc = 'This channel came from a layer called "' + \
+                        layer.layer_name + '" of an MLP.\n' + doc
+                    value.__doc__ = doc
+                    rval[layer.layer_name + '_' + key] = value
+               """
+            top_layer = self.layers[-1]
+            ch = top_layer.get_layer_monitoring_channels()
+            for key, value in ch.iteritems():
+                doc = get_monitor_doc(value)
+                if doc is None:
+                    doc = str(type(top_layer)) + \
+                        ".get_monitoring_channels_from_state did" + \
+                        " not provide any further documentation for" + \
+                        " this channel."
+                doc = 'This channel came from a layer called "' + \
+                    top_layer.layer_name + '" of an MLP.\n' + doc
+                value.__doc__ = doc
+                rval[top_layer.layer_name + '_' + key] = value
+
+            Z, log_det_jac = self.get_fprop_and_log_det_jacobian(data)
+            prior = self.log_p_z(Z)
+            rval['ave_output'] = Z.mean()
+            rval['ave_log_det_jac'] = log_det_jac.mean()
+            rval['ave_prior'] = prior.mean()
+            rval['cumulative_sum'] = self.prior.get_cumulative(Z).sum(axis=1).mean(axis=0)
+
         return rval
 
     @wraps(Model.get_lr_scalers)
