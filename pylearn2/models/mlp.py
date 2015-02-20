@@ -14,6 +14,8 @@ import scipy.linalg
 import theano
 import theano.tensor as T
 from pylearn2.models.model import Model
+import pylearn2.models
+import pylearn2.models.mlp
 from pylearn2.models.mlp import Layer, Linear, MLP
 from pylearn2.space import VectorSpace, CompositeSpace
 from pylearn2.utils import sharedX, wraps, as_floatX
@@ -265,6 +267,68 @@ class Homothety(Layer):
                                  ('S_over_2_stdev', 1.0 * (S > (S.mean() + 2 * S.std())).sum() )]))
 
         return rval
+
+class SigmaScaling(Layer):
+    def __init__(self, layer_name, **kwargs):
+        super(SigmaScaling, self).__init__(**kwargs)
+        self.layer_name = layer_name
+
+    @wraps(Layer.set_input_space)
+    def set_input_space(self, space):
+        self.input_space = space
+        self.output_space = space
+        dim = space.get_total_dimension()
+        self.S = sharedX(np.zeros((dim,)) + 1, self.layer_name+'_S')
+        self._params = [self.S]
+
+    @wraps(Layer.fprop)
+    def fprop(self, state_below):
+        state = state_below / self.S.flatten()
+        return state
+
+    def inv_fprop(self, state):
+        """
+        Inversion of the Homothety forward propagation.
+
+        Parameters
+        ----------
+        state : tensor_like, member of self.output_space
+            The state above the layer
+
+        Returns
+        -------
+        state_below : tensor_like
+            The resulting state below
+        """
+        state_below = state * self.S.flatten()
+        return state_below
+
+    def get_fprop_and_log_det_jacobian(self, state_below):
+        """
+        Get the state of the layer and the log-Jacobian determinant of the
+        transformation.
+
+        Parameters
+        ----------
+        state_below : tensor_like, member of self.input_space
+            A minibatch of states below.
+
+        Returns
+        -------
+        state : tensor_like, member of self.output_space
+            A minibatch of states of this layer.
+        log_det_jac : tensor_like
+            Log Jacobian determinant of the transformation
+        """
+        return self.fprop(state_below), -(T.log(self.S)).sum()
+
+    @wraps(Layer.get_weight_decay)
+    def get_weight_decay(self, coeffs):
+        return coeffs * self.S.sum()
+
+    @wraps(Layer.get_l1_weight_decay)
+    def get_l1_weight_decay(self, coeffs):
+        return coeffs * abs(self.S).sum()
 
 class Reordering(Layer):
     def __init__(self, layer_name, mode='tile', ** kwargs):

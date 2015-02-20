@@ -9,6 +9,7 @@ __maintainer__ = "Laurent Dinh"
 __email__ = "dinhlaur@iro"
 
 from nice.pylearn2.models.mlp import Homothety
+from nice.pylearn2.models.mlp import SigmaScaling
 import operator
 from pylearn2.costs.cost import Cost, DefaultDataSpecsMixin, NullDataSpecsMixin
 from pylearn2.utils import wraps
@@ -46,7 +47,7 @@ class SigmaPenalty(NullDataSpecsMixin, Cost):
         assert T.scalar() != 0.
         self.get_data_specs(model)[0].validate(data)
         layer = model.encoder.layers[-1]
-        assert isinstance(layer, Homothety)
+        assert isinstance(layer, (Homothety, SigmaScaling))
         cost = layer.get_sigma_l1_decay(self.coeff)
         cost.name = "sigma_l1_penalty"
         return cost
