@@ -160,6 +160,34 @@ class StandardLogistic(Distribution):
     def get_cumulative(self, z):
         return 1.0 / (1 + T.exp(-z))
 
+
+class StandardExponential(Distribution):
+    @wraps(Distribution.get_log_likelihood)
+    def get_log_likelihood(self, Z):
+        log_likelihood = -Z
+        log_likelihood = log_likelihood.sum(axis=-1)
+
+        return log_likelihood
+
+    @wraps(Distribution.sample)
+    def sample(self, shape):
+        samples = self.theano_rng.uniform(size=shape)
+        samples = -T.log(samples)
+        return samples
+
+    @wraps(Distribution.entropy)
+    def entropy(self, shape):
+        entropy = 1.
+        entropy *= T.ones(shape)
+        entropy = entropy.sum(axis=-1)
+
+        return entropy
+
+    @wraps(Distribution.get_cumulative)
+    def get_cumulative(self, z):
+        return T.switch(T.lt(z, 0), 0, T.exp(-z))
+
+
 class NICE(Distribution):
     """
     Non-linear independent components estimation.
