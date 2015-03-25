@@ -159,6 +159,34 @@ class StandardLogistic(Distribution):
     @wraps(Distribution.get_cumulative)
     def get_cumulative(self, z):
         return 1.0 / (1 + T.exp(-z))
+    
+
+class StandardGumbel(Distribution):
+    @wraps(Distribution.get_log_likelihood)
+    def get_log_likelihood(self, Z):
+        log_likelihood = -Z - T.exp(-Z)
+        log_likelihood = log_likelihood.sum(axis=-1)
+
+        return log_likelihood
+    
+    @wraps(Distribution.sample)
+    def sample(self, shape):
+        samples = self.theano_rng.uniform(size=shape)
+        samples = -T.log(-T.log(samples))
+        
+        return samples
+    
+    @wraps(Distribution.entropy)
+    def entropy(self, shape):
+        entropy = np.euler_gamma + 1
+        entropy *= T.ones(shape)
+        entropy = entropy.sum(axis=-1)
+
+        return entropy
+    
+    @wraps(Distribution.get_cumulative)
+    def get_cumulative(self, z):
+        return T.exp(-T.exp(-z))
 
 
 class StandardExponential(Distribution):
