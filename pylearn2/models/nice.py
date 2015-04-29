@@ -161,12 +161,40 @@ class StandardLogistic(Distribution):
         return 1.0 / (1 + T.exp(-z))
     
 
+class StandardLaplace(Distribution):
+    @wraps(Distribution.get_log_likelihood)
+    def get_log_likelihood(self, Z):
+        log_likelihood = sharedX(np.log(0.5)) - T.abs_(Z)
+        log_likelihood = log_likelihood.sum(axis=-1)
+        
+        return log_likelihood
+
+    @wraps(Distribution.sample)
+    def sample(self, shape):
+        samples = self.theano_rng.uniform(size=shape)
+        samples = T.sgn(samples - 0.5) * T.log(1 - 2*T.abs_(samples - 0.5))
+        
+        return samples
+
+    @wraps(Distribution.entropy)
+    def entropy(self, shape):
+        entropy = 1. + np.log(2.)
+        entropy *= T.ones(shape)
+        entropy = entropy.sum(axis=-1)
+        
+        return entropy
+
+    @wraps(Distribution.get_cumulative)
+    def get_cumulative(self, z):
+        return sharedX(0.5) + 0.5 * T.sgn(z) * (1 - T.exp(-T.abs_(z)))
+
+
 class StandardGumbel(Distribution):
     @wraps(Distribution.get_log_likelihood)
     def get_log_likelihood(self, Z):
         log_likelihood = -Z - T.exp(-Z)
         log_likelihood = log_likelihood.sum(axis=-1)
-
+        
         return log_likelihood
     
     @wraps(Distribution.sample)
@@ -178,10 +206,10 @@ class StandardGumbel(Distribution):
     
     @wraps(Distribution.entropy)
     def entropy(self, shape):
-        entropy = np.euler_gamma + 1
+        entropy = np.euler_gamma + 1.
         entropy *= T.ones(shape)
         entropy = entropy.sum(axis=-1)
-
+        
         return entropy
     
     @wraps(Distribution.get_cumulative)
